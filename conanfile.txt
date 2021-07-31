@@ -1,0 +1,7 @@
+[requires]
+eigen/3.3.8
+sophus/1.0.0
+ceres-solver/2.0.0
+
+[generators]
+cmake
