@@ -6,5 +6,6 @@
 
 namespace sote
 {
-  void optimize(const MeasuredScene& measurements, OptimizedScene& parameters);
+  template<typename RotationType>
+  void optimize(const MeasuredScene<RotationType>& measurements, OptimizedScene<RotationType>& parameters);
 }

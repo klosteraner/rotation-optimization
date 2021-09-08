@@ -13,7 +13,7 @@ namespace sote
 {
   namespace
   {
-    void addAngleAxisReprojectionError(ceres::Problem& problem, const MeasuredScene& measurements, OptimizedScene& parameters)
+    void addAngleAxisReprojectionError(ceres::Problem& problem, const MeasuredScene<AngleAxisRotation>& measurements, OptimizedScene<AngleAxisRotation>& parameters)
     {
       for(const auto& track : measurements.tracks)
       {
@@ -33,20 +33,58 @@ namespace sote
       }
     }
 
-    void setupAngleAxisProblem(ceres::Problem& problem, const MeasuredScene& measurements, OptimizedScene& parameters)
+    void addQuaternionReprojectionError(ceres::Problem& problem, const MeasuredScene<QuaternionRotation>& measurements, OptimizedScene<QuaternionRotation>& parameters)
+    {
+      for(const auto& track : measurements.tracks)
+      {
+        for(const auto& camIdAndMark : track.marks)
+        {
+          const auto& camera = measurements.cameras.at(camIdAndMark.first);
+
+          ceres::CostFunction* f =
+            new ceres::AutoDiffCostFunction<QuaternionReprojectionCostFunctorAuto, 2, 4>(
+              new QuaternionReprojectionCostFunctorAuto(camera.pose.position,
+                                                        measurements.cameraSensors.at(camera.sensorId),
+                                                        camIdAndMark.second,
+                                                        track.originalPosition));
+
+          problem.AddParameterBlock(parameters.rotation[camIdAndMark.first].coeffs().data(), 4, new ceres::EigenQuaternionParameterization());
+          problem.AddResidualBlock(f, nullptr, parameters.rotation[camIdAndMark.first].coeffs().data());
+        }
+      }
+    }
+
+    template<typename RotationType> void setupProblem(ceres::Problem& problem, const MeasuredScene<RotationType>& measurements, OptimizedScene<RotationType>& parameters);
+    template<> void setupProblem(ceres::Problem& problem, const MeasuredScene<AngleAxisRotation>& measurements, OptimizedScene<AngleAxisRotation>& parameters)
     {
       addAngleAxisReprojectionError(problem, measurements, parameters);
     }
-
-    void setupProblem(ceres::Problem& problem, const MeasuredScene& measurements, OptimizedScene& parameters)
+    template<> void setupProblem(ceres::Problem& problem, const MeasuredScene<QuaternionRotation>& measurements, OptimizedScene<QuaternionRotation>& parameters)
     {
-      setupAngleAxisProblem(problem, measurements, parameters);
+      addQuaternionReprojectionError(problem, measurements, parameters);
+    }
+
+    template<typename RotationType> void print(const RotationType& expectedRotation, const RotationType& optimizedRotation);
+    template<> void print(const AngleAxisRotation& expectedRotation, const AngleAxisRotation& optimizedRotation)
+    {
+      std::cout << "Expected: " << expectedRotation(0) << " Optimized: " << optimizedRotation(0) << std::endl;
+      std::cout << "Expected: " << expectedRotation(1) << " Optimized: " << optimizedRotation(1) << std::endl;
+      std::cout << "Expected: " << expectedRotation(2) << " Optimized: " << optimizedRotation(2) << std::endl;
+      std::cout << "-----------------------------------------" << std::endl;
+    }
+    template<> void print(const QuaternionRotation& expectedRotation, const QuaternionRotation& optimizedRotation)
+    {
+      std::cout << "Expected: " << expectedRotation.x() << " Optimized: " << optimizedRotation.x() << std::endl;
+      std::cout << "Expected: " << expectedRotation.y() << " Optimized: " << optimizedRotation.y() << std::endl;
+      std::cout << "Expected: " << expectedRotation.z() << " Optimized: " << optimizedRotation.z() << std::endl;
+      std::cout << "Expected: " << expectedRotation.w() << " Optimized: " << optimizedRotation.w() << std::endl;
+      std::cout << "-----------------------------------------" << std::endl;
     }
   }
 
-  void optimize(const MeasuredScene& measurements, OptimizedScene& parameters)
+  template<typename RotationType>
+  void optimizeImpl(const MeasuredScene<RotationType>& measurements, OptimizedScene<RotationType>& parameters)
   {
-
   	ceres::Problem problem;
     setupProblem(problem, measurements, parameters);
 
@@ -67,10 +105,16 @@ namespace sote
   	std::cout << summary.FullReport() << std::endl;
     for(int i = 0; i < measurements.cameras.size(); i++)
     {
-      std::cout << "IMU: " << measurements.cameras.at(i).pose.rotation(0) << " Opt: " << parameters.rotation.at(i)(0) << std::endl;
-      std::cout << "IMU: " << measurements.cameras.at(i).pose.rotation(1) << " Opt: " << parameters.rotation.at(i)(1) << std::endl;
-      std::cout << "IMU: " << measurements.cameras.at(i).pose.rotation(2) << " Opt: " << parameters.rotation.at(i)(2) << std::endl;
-      std::cout << "-----------------------------------------" << std::endl;
+      print(measurements.cameras.at(i).pose.rotation, parameters.rotation.at(i));
     }
+  }
+
+  template<> void optimize(const MeasuredScene<AngleAxisRotation>& measurements, OptimizedScene<AngleAxisRotation>& parameters)
+  {
+    optimizeImpl(measurements, parameters);
+  }
+  template<> void optimize(const MeasuredScene<QuaternionRotation>& measurements, OptimizedScene<QuaternionRotation>& parameters)
+  {
+    optimizeImpl(measurements, parameters);
   }
 }

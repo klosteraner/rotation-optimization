@@ -6,5 +6,6 @@ namespace sote
 {
     Eigen::Vector3d noise3d(double sigma = 1);
 
-    std::pair<MeasuredScene, OptimizedScene> setupTestScene();
+    template<typename RotationType>
+    std::pair<MeasuredScene<RotationType>, OptimizedScene<RotationType>> setupTestScene();
 }

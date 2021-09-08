@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Eigen/Core>
 #include <Eigen/Geometry>
 
 #include <memory>
@@ -27,17 +28,20 @@ struct CameraSensor
 	double cy;
 };
 
-using Rotation = Eigen::Vector3d; // angle axis
+using AngleAxisRotation = Eigen::Vector3d;
+using QuaternionRotation = Eigen::Quaterniond;
 
+template<typename RotationType>
 struct CameraPose
 {
   Eigen::Vector3d position;
-  Rotation rotation;
+  RotationType rotation;
 };
 
+template<typename RotationType>
 struct Camera
 {
-  CameraPose pose;
+  CameraPose<RotationType> pose;
   std::size_t sensorId;
 };
 
@@ -48,15 +52,17 @@ struct Track
 };
 
 // Container for measurements
+template<typename RotationType>
 struct MeasuredScene
 {
   std::vector<CameraSensor> cameraSensors;
-  std::vector<Camera> cameras;
+  std::vector<Camera<RotationType>> cameras;
   std::vector<Track> tracks;
 };
 
+template<typename RotationType>
 struct OptimizedScene
 {
-  std::vector<Rotation> rotation;
+  std::vector<RotationType> rotation;
 };
 }
