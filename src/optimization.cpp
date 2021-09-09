@@ -64,20 +64,20 @@ namespace sote
       addQuaternionReprojectionError(problem, measurements, parameters);
     }
 
-    template<typename RotationType> void print(const RotationType& expectedRotation, const RotationType& optimizedRotation);
-    template<> void print(const AngleAxisRotation& expectedRotation, const AngleAxisRotation& optimizedRotation)
+    template<typename RotationType> void print(const RotationType& expectedRotation, const RotationType& initialRotation, const RotationType& optimizedRotation);
+    template<> void print(const AngleAxisRotation& expectedRotation, const AngleAxisRotation& initialRotation, const AngleAxisRotation& optimizedRotation)
     {
-      std::cout << "Expected: " << expectedRotation(0) << " Optimized: " << optimizedRotation(0) << std::endl;
-      std::cout << "Expected: " << expectedRotation(1) << " Optimized: " << optimizedRotation(1) << std::endl;
-      std::cout << "Expected: " << expectedRotation(2) << " Optimized: " << optimizedRotation(2) << std::endl;
+      std::cout << "Initial: " << initialRotation(0) << " -> Expected: " << expectedRotation(0) << " Optimized: " << optimizedRotation(0) << std::endl;
+      std::cout << "Initial: " << initialRotation(1) << " -> Expected: " << expectedRotation(1) << " Optimized: " << optimizedRotation(1) << std::endl;
+      std::cout << "Initial: " << initialRotation(2) << " -> Expected: " << expectedRotation(2) << " Optimized: " << optimizedRotation(2) << std::endl;
       std::cout << "-----------------------------------------" << std::endl;
     }
-    template<> void print(const QuaternionRotation& expectedRotation, const QuaternionRotation& optimizedRotation)
+    template<> void print(const QuaternionRotation& expectedRotation, const QuaternionRotation& initialRotation, const QuaternionRotation& optimizedRotation)
     {
-      std::cout << "Expected: " << expectedRotation.x() << " Optimized: " << optimizedRotation.x() << std::endl;
-      std::cout << "Expected: " << expectedRotation.y() << " Optimized: " << optimizedRotation.y() << std::endl;
-      std::cout << "Expected: " << expectedRotation.z() << " Optimized: " << optimizedRotation.z() << std::endl;
-      std::cout << "Expected: " << expectedRotation.w() << " Optimized: " << optimizedRotation.w() << std::endl;
+      std::cout << "Initial: " << initialRotation.x() << " -> Expected: " << expectedRotation.x() << " Optimized: " << optimizedRotation.x() << std::endl;
+      std::cout << "Initial: " << initialRotation.y() << " -> Expected: " << expectedRotation.y() << " Optimized: " << optimizedRotation.y() << std::endl;
+      std::cout << "Initial: " << initialRotation.z() << " -> Expected: " << expectedRotation.z() << " Optimized: " << optimizedRotation.z() << std::endl;
+      std::cout << "Initial: " << initialRotation.w() << " -> Expected: " << expectedRotation.w() << " Optimized: " << optimizedRotation.w() << std::endl;
       std::cout << "-----------------------------------------" << std::endl;
     }
   }
@@ -85,6 +85,8 @@ namespace sote
   template<typename RotationType>
   void optimizeImpl(const MeasuredScene<RotationType>& measurements, OptimizedScene<RotationType>& parameters)
   {
+    auto initialParameters = parameters;
+
   	ceres::Problem problem;
     setupProblem(problem, measurements, parameters);
 
@@ -93,7 +95,7 @@ namespace sote
      */
   	ceres::Solver::Options options;
   	options.minimizer_progress_to_stdout = true;
-    options.function_tolerance = 1e-13;
+    options.max_num_iterations = 100;
   	ceres::Solver::Summary summary;
 
     steady_clock::time_point t1 = steady_clock::now();
@@ -105,7 +107,7 @@ namespace sote
   	std::cout << summary.FullReport() << std::endl;
     for(int i = 0; i < measurements.cameras.size(); i++)
     {
-      print(measurements.cameras.at(i).pose.rotation, parameters.rotation.at(i));
+      print(measurements.cameras.at(i).pose.rotation, initialParameters.rotation.at(i), parameters.rotation.at(i));
     }
   }
 

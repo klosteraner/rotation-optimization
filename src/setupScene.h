@@ -4,8 +4,9 @@
 
 namespace sote
 {
-    Eigen::Vector3d noise3d(double sigma = 1);
+template<typename RotationType>
+std::pair<MeasuredScene<RotationType>, OptimizedScene<RotationType>> setupSmallTestScene();
 
-    template<typename RotationType>
-    std::pair<MeasuredScene<RotationType>, OptimizedScene<RotationType>> setupTestScene();
+template<typename RotationType>
+std::pair<MeasuredScene<RotationType>, OptimizedScene<RotationType>> setupBigTestScene();
 }

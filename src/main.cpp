@@ -16,7 +16,7 @@ int main()
 
 	sote::MeasuredScene<Rotation> measurements;
 	sote::OptimizedScene<Rotation> parameters;
-	std::tie(measurements, parameters) = sote::setupTestScene<Rotation>();
+	std::tie(measurements, parameters) = sote::setupBigTestScene<Rotation>();
 
 	sote::optimize(measurements, parameters);
 
