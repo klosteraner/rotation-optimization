@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.4)
-project(sophus-test)
+project(rotation-optimization)
 
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup()

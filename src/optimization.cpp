@@ -33,7 +33,7 @@ namespace sote
       }
     }
 
-    void addQuaternionReprojectionError(ceres::Problem& problem, const MeasuredScene<QuaternionRotation>& measurements, OptimizedScene<QuaternionRotation>& parameters)
+    void addQuaternionReprojectionError(ceres::Problem& problem, const MeasuredScene<QuaternionRotation>& measurements, OptimizedScene<QuaternionRotation>& parameters, bool useAnalyticDerivative = true)
     {
       for(const auto& track : measurements.tracks)
       {
@@ -41,12 +41,22 @@ namespace sote
         {
           const auto& camera = measurements.cameras.at(camIdAndMark.first);
 
-          ceres::CostFunction* f =
-            new ceres::AutoDiffCostFunction<QuaternionReprojectionCostFunctorAuto, 2, 4>(
-              new QuaternionReprojectionCostFunctorAuto(camera.pose.position,
-                                                        measurements.cameraSensors.at(camera.sensorId),
-                                                        camIdAndMark.second,
-                                                        track.originalPosition));
+          ceres::CostFunction* f;
+          if(useAnalyticDerivative)
+          {
+            f = new QuaternionReprojectionCostFunctionAna(camera.pose.position,
+                                                          measurements.cameraSensors.at(camera.sensorId),
+                                                          camIdAndMark.second,
+                                                          track.originalPosition);
+          }
+          else
+          {
+            f = new ceres::AutoDiffCostFunction<QuaternionReprojectionCostFunctorAuto, 2, 4>(
+                  new QuaternionReprojectionCostFunctorAuto(camera.pose.position,
+                                                            measurements.cameraSensors.at(camera.sensorId),
+                                                            camIdAndMark.second,
+                                                            track.originalPosition));
+          }
 
           problem.AddParameterBlock(parameters.rotation[camIdAndMark.first].coeffs().data(), 4, new ceres::EigenQuaternionParameterization());
           problem.AddResidualBlock(f, nullptr, parameters.rotation[camIdAndMark.first].coeffs().data());
@@ -96,6 +106,7 @@ namespace sote
   	ceres::Solver::Options options;
   	options.minimizer_progress_to_stdout = true;
     options.max_num_iterations = 100;
+    options.function_tolerance = 1e-15;
   	ceres::Solver::Summary summary;
 
     steady_clock::time_point t1 = steady_clock::now();

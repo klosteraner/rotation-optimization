@@ -14,6 +14,8 @@ namespace sote
     projection[1] = cameraCoordinates[1] * f_by_z + T(sensor.cy);
   }
 
+  Eigen::Matrix<double, 2, 3> compute_J_project_cameraCoordinates(const Eigen::Vector3d& cameraCoordinates, const CameraSensor& sensor);
+
   // Projection function to be used everywhere
   // including ceres (that's why the templating)
   template<typename T>
@@ -49,6 +51,16 @@ namespace sote
     result[2] = pt[2] + eigenQ[3] * uv2 + (eigenQ[0] * uv1 - eigenQ[1] * uv0);
   }
 
+  template<typename T>
+  void compute_cameraCoordinates(const T eigenQ[4], const Eigen::Vector3d& worldCoordinates, const Eigen::Vector3d& cameraPosition, T result[3])
+  {
+    // 1. Apply extrinsics: world -> camera coordinates
+    const T p[3] = {T(worldCoordinates[0] - cameraPosition[0]),
+                    T(worldCoordinates[1] - cameraPosition[1]),
+                    T(worldCoordinates[2] - cameraPosition[2])};
+    eigenUnitQuaternionRotatePoint(eigenQ, p, result);
+  }
+
   // Projection function to be used everywhere
   // including ceres (that's why the templating)
   template<typename T>
@@ -56,15 +68,20 @@ namespace sote
                          const CameraSensor& sensor, const Eigen::Vector3d& worldCoordinates, T projection[2])
   {
     // 1. Apply extrinsics: world -> camera coordinates
-    const T p[3] = {T(worldCoordinates[0] - cameraPosition[0]),
-                    T(worldCoordinates[1] - cameraPosition[1]),
-                    T(worldCoordinates[2] - cameraPosition[2])};
     T p_camera[3];
-    eigenUnitQuaternionRotatePoint(eigenUnitQuaternionRotation, p, p_camera);
+    compute_cameraCoordinates(eigenUnitQuaternionRotation, worldCoordinates, cameraPosition, p_camera);
 
     // 2. Apply intrinsics
     project(p_camera, sensor, projection);
   }
+
+  // Analytic derivative of the projectQuaternion function
+  // Since its already the derivative, there is no need to support jets
+  void J_projectQuaternion_q(const double eigenUnitQuaternionRotation[4], const Eigen::Vector3d& cameraPosition,
+                             const CameraSensor& sensor, const Eigen::Vector3d& worldCoordinates, double jacobian[8]);
+
+  void J_projectQuaternion_angleAxis(const double eigenUnitQuaternionRotation[4], const Eigen::Vector3d& cameraPosition,
+                                     const CameraSensor& sensor, const Eigen::Vector3d& worldCoordinates, double jacobian[6]);
 
   // Convenience overload
   template<typename RotationType>
