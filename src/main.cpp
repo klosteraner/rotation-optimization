@@ -2,8 +2,6 @@
 #include "optimization.h"
 #include "types.h"
 
-#include "sophus/common.hpp"
-
 #include <iostream>
 #include <vector>
 
@@ -11,14 +9,16 @@
 
 int main()
 {
-	//using Rotation = sote::AngleAxisRotation; // Convenience switch
-	using Rotation = sote::QuaternionRotation; // Convenience switch
+	//using Rotation = roto::AngleAxisRotation; // Convenience switch
+	using Rotation = roto::QuaternionRotation; // Convenience switch
 
-	sote::MeasuredScene<Rotation> measurements;
-	sote::OptimizedScene<Rotation> parameters;
-	std::tie(measurements, parameters) = sote::setupBigTestScene<Rotation>();
+	roto::MeasuredScene<Rotation> measurements;
+	roto::OptimizedScene<Rotation> parameters;
 
-	sote::optimize(measurements, parameters);
+	//std::tie(measurements, parameters) = roto::setupSmallTestScene<Rotation>();
+	std::tie(measurements, parameters) = roto::setupBigTestScene<Rotation>();
+
+	roto::optimize(measurements, parameters);
 
 	return 0;
 }

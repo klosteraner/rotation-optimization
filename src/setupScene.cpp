@@ -6,7 +6,7 @@
 
 #include <random>
 
-namespace sote
+namespace roto
 {
 namespace
 {
@@ -81,7 +81,7 @@ std::pair<MeasuredScene<RotationType>, OptimizedScene<RotationType>> setupSmallT
 
   MeasuredScene<RotationType> scene;
 
-  scene.cameraSensors.push_back(CameraSensor(40, 30, 20, 20, 15));
+  scene.cameraSensors.push_back(CameraSensor{40, 30, 20, 20, 15});
 
   scene.cameras.push_back(
     Camera<RotationType>{CameraPose<RotationType>{
@@ -154,7 +154,7 @@ setupBigTestSceneImpl(const std::pair<std::size_t, std::size_t> cameraGridDimens
    */
 
   MeasuredScene<RotationType> scene;
-  scene.cameraSensors.push_back(CameraSensor(40, 30, 20, 20, 15));
+  scene.cameraSensors.push_back(CameraSensor{40, 30, 20, 20, 15});
   const auto& sensor = scene.cameraSensors.at(0);
 
   for(std::size_t i = 0; i < cameraGridDimensions.first; i++)
@@ -169,9 +169,9 @@ setupBigTestSceneImpl(const std::pair<std::size_t, std::size_t> cameraGridDimens
     }
   }
 
-  Eigen::Vector3d pointCenter(5*cameraGridDimensions.first, 5*cameraGridDimensions.second, 0.);
-  double numberOfReprojections = 0;
-  std::size_t maxLength = 0;
+  const Eigen::Vector3d pointCenter(5*cameraGridDimensions.first, 5*cameraGridDimensions.second, 0.);
+  double numberOfReprojections = 0.;
+  std::size_t maxLength = 0u;
   for(std::size_t k = 0; k < numberOfPoints; k++)
   {
     Track track;
@@ -208,7 +208,7 @@ setupBigTestSceneImpl(const std::pair<std::size_t, std::size_t> cameraGridDimens
   parameters.rotation.reserve(scene.cameras.size());
   for(int i = 0; i < scene.cameras.size(); i++)
   {
-    parameters.rotation.push_back(applyNoise(scene.cameras.at(i).pose.rotation, 0.2));
+    parameters.rotation.push_back(applyNoise(scene.cameras.at(i).pose.rotation, 0.1));
   }
 
   return std::make_pair(scene, parameters);
@@ -238,4 +238,4 @@ std::pair<MeasuredScene<QuaternionRotation>, OptimizedScene<QuaternionRotation>>
 {
   return setupBigTestSceneImpl<QuaternionRotation>(std::make_pair(10,10), 1000);
 }
-} // namespace sote
+} // namespace roto
