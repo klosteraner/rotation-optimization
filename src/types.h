@@ -7,19 +7,10 @@
 #include <vector>
 #include <map>
 
-namespace sote
+namespace roto
 {
 struct CameraSensor
 {
-  CameraSensor(int _w, int _h, double _f, double _cx, double _cy)
-  : w(_w),
-    h(_h),
-    f(_f),
-    cx(_cx),
-    cy(_cy){}
-
-  CameraSensor() : CameraSensor{2, 2, 2. ,1. ,1.} {}
-
 	int w;
 	int h;
 
@@ -65,4 +56,4 @@ struct OptimizedScene
 {
   std::vector<RotationType> rotation;
 };
-}
+} // namespace roto

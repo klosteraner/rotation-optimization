@@ -4,8 +4,9 @@
 
 #include <vector>
 
-namespace sote
+namespace roto
 {
-  template<typename RotationType>
-  void optimize(const MeasuredScene<RotationType>& measurements, OptimizedScene<RotationType>& parameters);
+// Setups & runs optimization on provided parameters
+template<typename RotationType>
+void optimize(const MeasuredScene<RotationType>& measurements, OptimizedScene<RotationType>& parameters);
 }
