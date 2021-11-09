@@ -6,6 +6,7 @@
 #include <ceres/ceres.h>
 
 #include <chrono>
+#include <algorithm>
 
 #include <Eigen/Geometry>
 
@@ -67,6 +68,44 @@ void addQuaternionReprojectionError(ceres::Problem& problem, const MeasuredScene
   }
 }
 
+void addMatrixReprojectionError(ceres::Problem& problem, const MeasuredScene<MatrixRotation>& measurements, OptimizedScene<MatrixRotation>& parameters, bool useAnalyticDerivative = false)
+{
+  for(const auto& track : measurements.tracks)
+  {
+    for(const auto& camIdAndMark : track.marks)
+    {
+      const auto& camera = measurements.cameras.at(camIdAndMark.first);
+
+      //ceres::CostFunction* f =
+      //  new ceres::AutoDiffCostFunction<AngleAxisReprojectionCostFunctorAuto, 2, 3>(
+      //    new AngleAxisReprojectionCostFunctorAuto(camera.pose.position,
+      //                                             measurements.cameraSensors.at(camera.sensorId),
+      //                                             camIdAndMark.second,
+      //                                             track.originalPosition));
+      ceres::CostFunction* f;
+      if(useAnalyticDerivative)
+      {
+        f = new RotationMatrixReprojectionCostFunctionAna2(camera.pose.position,
+                                                          measurements.cameraSensors.at(camera.sensorId),
+                                                          camIdAndMark.second,
+                                                          track.originalPosition);
+      }
+      else
+      {
+        f = new ceres::AutoDiffCostFunction<RotationMatrixReprojectionCostFunctorAuto, 2, 9>(
+              new RotationMatrixReprojectionCostFunctorAuto(camera.pose.position,
+                                                            measurements.cameraSensors.at(camera.sensorId),
+                                                            camIdAndMark.second,
+                                                            track.originalPosition));
+      }
+
+      // Parametrization via exp(delta) * q (without scaling, i.e. delta = 2*angleAxis)
+      problem.AddParameterBlock(parameters.rotation[camIdAndMark.first].data(), 9, new RotationMatrixParameterization());
+      problem.AddResidualBlock(f, nullptr, parameters.rotation[camIdAndMark.first].data());
+    }
+  }
+}
+
 template<typename RotationType> void setupProblem(ceres::Problem& problem, const MeasuredScene<RotationType>& measurements, OptimizedScene<RotationType>& parameters);
 template<> void setupProblem(ceres::Problem& problem, const MeasuredScene<AngleAxisRotation>& measurements, OptimizedScene<AngleAxisRotation>& parameters)
 {
@@ -75,6 +114,10 @@ template<> void setupProblem(ceres::Problem& problem, const MeasuredScene<AngleA
 template<> void setupProblem(ceres::Problem& problem, const MeasuredScene<QuaternionRotation>& measurements, OptimizedScene<QuaternionRotation>& parameters)
 {
   addQuaternionReprojectionError(problem, measurements, parameters);
+}
+template<> void setupProblem(ceres::Problem& problem, const MeasuredScene<MatrixRotation>& measurements, OptimizedScene<MatrixRotation>& parameters)
+{
+  addMatrixReprojectionError(problem, measurements, parameters);
 }
 
 template<typename RotationType> void print(const RotationType& expectedRotation, const RotationType& initialRotation, const RotationType& optimizedRotation);
@@ -91,6 +134,13 @@ template<> void print(const QuaternionRotation& expectedRotation, const Quaterni
   std::cout << "Initial: " << initialRotation.y() << " -> Expected: " << expectedRotation.y() << " Optimized: " << optimizedRotation.y() << std::endl;
   std::cout << "Initial: " << initialRotation.z() << " -> Expected: " << expectedRotation.z() << " Optimized: " << optimizedRotation.z() << std::endl;
   std::cout << "Initial: " << initialRotation.w() << " -> Expected: " << expectedRotation.w() << " Optimized: " << optimizedRotation.w() << std::endl;
+  std::cout << "-----------------------------------------" << std::endl;
+}
+template<> void print(const MatrixRotation& expectedRotation, const MatrixRotation& initialRotation, const MatrixRotation& optimizedRotation)
+{
+  std::cout << "Initial: " << initialRotation.row(0) << " -> Expected: " << expectedRotation.row(0) << " Optimized: " << optimizedRotation.row(0) << std::endl;
+  std::cout << "Initial: " << initialRotation.row(1) << " -> Expected: " << expectedRotation.row(1) << " Optimized: " << optimizedRotation.row(1) << std::endl;
+  std::cout << "Initial: " << initialRotation.row(2) << " -> Expected: " << expectedRotation.row(2) << " Optimized: " << optimizedRotation.row(2) << std::endl;
   std::cout << "-----------------------------------------" << std::endl;
 }
 
@@ -131,6 +181,24 @@ template<> void printErrorStatistics(const std::vector<Camera<QuaternionRotation
   std::cout << "Mean error:" << std::endl << meanErrorCoeffwise << std::endl;
   std::cout << "Max error:" << std::endl << maxErrorCoeffwise << std::endl;
 }
+template<> void printErrorStatistics(const std::vector<Camera<MatrixRotation> >& expectedParameters, const std::vector<MatrixRotation>& optimizedRotations)
+{
+  assert(expectedParameters.size() == optimizedRotations.size());
+
+  Eigen::Array<double, 3, 3> meanErrorCoeffwise = MatrixRotation::Zero();
+  Eigen::Array<double, 3, 3> maxErrorCoeffwise = MatrixRotation::Zero();
+  for(int i = 0; i < expectedParameters.size(); i++)
+  {
+    Eigen::Array<double, 3, 3> error = (expectedParameters.at(i).pose.rotation - optimizedRotations.at(i));
+    meanErrorCoeffwise += error.abs();
+    maxErrorCoeffwise = maxErrorCoeffwise.max(error.abs());
+  }
+  meanErrorCoeffwise /= expectedParameters.size();
+
+  std::cout << "Parameter error statistics: " << std::endl;
+  std::cout << "Mean error:" << std::endl << meanErrorCoeffwise << std::endl;
+  std::cout << "Max error:" << std::endl << maxErrorCoeffwise << std::endl;
+}
 
 template<typename RotationType>
 void optimizeImpl(const MeasuredScene<RotationType>& measurements, OptimizedScene<RotationType>& parameters)
@@ -148,7 +216,7 @@ void optimizeImpl(const MeasuredScene<RotationType>& measurements, OptimizedScen
    */
   ceres::Solver::Options options;
   options.minimizer_progress_to_stdout = true;
-  options.max_num_iterations = 50;
+  options.max_num_iterations = 100;
   options.function_tolerance = 1e-15;
   ceres::Solver::Summary summary;
 
@@ -164,7 +232,8 @@ void optimizeImpl(const MeasuredScene<RotationType>& measurements, OptimizedScen
 
   std::cout << summary.FullReport() << std::endl;
   std::cout << "First 10 cameras: " << std::endl;
-  for(int i = 0; i < 10; i++)
+  auto n = std::min(10lu,measurements.cameras.size());
+  for(int i = 0; i < n ; i++)
   {
     print(measurements.cameras.at(i).pose.rotation, initialParameters.rotation.at(i), parameters.rotation.at(i));
   }
@@ -177,6 +246,10 @@ template<> void optimize(const MeasuredScene<AngleAxisRotation>& measurements, O
   optimizeImpl(measurements, parameters);
 }
 template<> void optimize(const MeasuredScene<QuaternionRotation>& measurements, OptimizedScene<QuaternionRotation>& parameters)
+{
+  optimizeImpl(measurements, parameters);
+}
+template<> void optimize(const MeasuredScene<MatrixRotation>& measurements, OptimizedScene<MatrixRotation>& parameters)
 {
   optimizeImpl(measurements, parameters);
 }

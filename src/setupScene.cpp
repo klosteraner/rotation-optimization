@@ -2,8 +2,6 @@
 
 #include "geometry.hpp"
 
-#include "sophus/common.hpp"
-
 #include <random>
 
 namespace roto
@@ -43,6 +41,15 @@ template<> QuaternionRotation applyNoise(const QuaternionRotation& rotation, dou
 
   return rotation * Eigen::Quaterniond(Eigen::AngleAxisd(noiseAngle, noiseAxis));
 }
+template<> MatrixRotation applyNoise(const MatrixRotation& rotation, double sigma)
+{
+  const Eigen::Vector3d noise = noise3d(sigma);
+  const double noiseAngle = noise.norm();
+  const Eigen::Vector3d noiseAxis = noise / noiseAngle;
+
+  return rotation * Eigen::Matrix3d(Eigen::AngleAxisd(noiseAngle, noiseAxis));
+}
+
 
 template<typename RotationType> RotationType lookingDown();
 template<> AngleAxisRotation lookingDown<AngleAxisRotation>()
@@ -53,6 +60,10 @@ template<> QuaternionRotation lookingDown<QuaternionRotation>()
 {
   return QuaternionRotation::Identity();
 }
+template<> MatrixRotation lookingDown<MatrixRotation>()
+{
+  return MatrixRotation::Identity();
+}
 
 template<typename RotationType> void print(const RotationType& rotation);
 template<> void print(const AngleAxisRotation& rotation)
@@ -62,6 +73,10 @@ template<> void print(const AngleAxisRotation& rotation)
 template<> void print(const QuaternionRotation& rotation)
 {
   std::cout << "initial quaternion: " << rotation.coeffs() << std::endl;
+}
+template<> void print(const MatrixRotation& rotation)
+{
+  std::cout << "initial matrix: " << rotation << std::endl;
 }
 
 template <typename RotationType>
@@ -86,17 +101,17 @@ std::pair<MeasuredScene<RotationType>, OptimizedScene<RotationType>> setupSmallT
   scene.cameras.push_back(
     Camera<RotationType>{CameraPose<RotationType>{
       Eigen::Vector3d(0., 0., 2.),  // position
-      lookingDown<RotationType>()},                 // rotation
+      lookingDown<RotationType>()}, // rotation
       0});						              // sensor
   scene.cameras.push_back(
     Camera<RotationType>{CameraPose<RotationType>{
       Eigen::Vector3d(1., 0., 2.),  // position
-      lookingDown<RotationType>()},                 // rotation
+      lookingDown<RotationType>()}, // rotation
       0});							            // sensor
   scene.cameras.push_back(
     Camera<RotationType>{CameraPose<RotationType>{
       Eigen::Vector3d(0., 1., 2.),  // position
-      lookingDown<RotationType>()},                 // rotation
+      lookingDown<RotationType>()}, // rotation
       0});							            // sensor
 
   // Tracks
@@ -228,6 +243,12 @@ std::pair<MeasuredScene<QuaternionRotation>, OptimizedScene<QuaternionRotation>>
 }
 
 template<>
+std::pair<MeasuredScene<MatrixRotation>, OptimizedScene<MatrixRotation>> setupSmallTestScene()
+{
+  return setupSmallTestSceneImpl<MatrixRotation>();
+}
+
+template<>
 std::pair<MeasuredScene<AngleAxisRotation>, OptimizedScene<AngleAxisRotation>> setupBigTestScene()
 {
   return setupBigTestSceneImpl<AngleAxisRotation>(std::make_pair(10,10), 1000);
@@ -237,5 +258,11 @@ template<>
 std::pair<MeasuredScene<QuaternionRotation>, OptimizedScene<QuaternionRotation>> setupBigTestScene()
 {
   return setupBigTestSceneImpl<QuaternionRotation>(std::make_pair(10,10), 1000);
+}
+
+template<>
+std::pair<MeasuredScene<MatrixRotation>, OptimizedScene<MatrixRotation>> setupBigTestScene()
+{
+  return setupBigTestSceneImpl<MatrixRotation>(std::make_pair(10,10), 1000);
 }
 } // namespace roto

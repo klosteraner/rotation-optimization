@@ -10,7 +10,8 @@
 int main()
 {
 	//using Rotation = roto::AngleAxisRotation; // Convenience switch
-	using Rotation = roto::QuaternionRotation; // Convenience switch
+	//using Rotation = roto::QuaternionRotation; // Convenience switch
+	using Rotation = roto::MatrixRotation; // Convenience switch
 
 	roto::MeasuredScene<Rotation> measurements;
 	roto::OptimizedScene<Rotation> parameters;
