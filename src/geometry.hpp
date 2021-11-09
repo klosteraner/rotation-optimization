@@ -18,7 +18,7 @@ Eigen::Matrix<double, 2, 3> compute_J_project_cameraCoordinates(const Eigen::Vec
 
 // Projection based on Ceres' (global!) angleAxis implementation
 // Note: Scaling is different than for Ceres' parametrization
-// used to locally parametrize R = q (Quaternion rotation) 
+// used to locally parametrize R = q (Quaternion rotation)
 template<typename T>
 void projectAngleAxis(const T angleAxisRotation[3], const Eigen::Vector3d& cameraPosition,
                       const CameraSensor& sensor, const Eigen::Vector3d& worldCoordinates, T projection[2])
@@ -53,7 +53,7 @@ inline void eigenUnitQuaternionRotatePoint(const T eigenQ[4],
 }
 
 template<typename T>
-void compute_cameraCoordinates(const T eigenQ[4], const Eigen::Vector3d& worldCoordinates, const Eigen::Vector3d& cameraPosition, T result[3])
+void compute_cameraCoordinatesQuaternion(const T eigenQ[4], const Eigen::Vector3d& worldCoordinates, const Eigen::Vector3d& cameraPosition, T result[3])
 {
   // 1. Apply extrinsics: world -> camera coordinates
   const T p[3] = {T(worldCoordinates[0] - cameraPosition[0]),
@@ -70,10 +70,23 @@ void projectQuaternion(const T eigenUnitQuaternionRotation[4], const Eigen::Vect
 {
   // 1. Apply extrinsics: world -> camera coordinates
   T p_camera[3];
-  compute_cameraCoordinates(eigenUnitQuaternionRotation, worldCoordinates, cameraPosition, p_camera);
+  compute_cameraCoordinatesQuaternion(eigenUnitQuaternionRotation, worldCoordinates, cameraPosition, p_camera);
 
   // 2. Apply intrinsics
   project(p_camera, sensor, projection);
+}
+
+template<typename T>
+void projectMatrix(const T rowMajorMatrixRotation[9], const Eigen::Vector3d& cameraPosition,
+                   const CameraSensor& sensor, const Eigen::Vector3d& worldCoordinates, T projection[2])
+{
+  Eigen::Map<const Eigen::Matrix<T, 3, 3, Eigen::RowMajor>> R(rowMajorMatrixRotation);
+  const Eigen::Matrix<T, 3, 1> p(T(worldCoordinates[0] - cameraPosition[0]),
+                                 T(worldCoordinates[1] - cameraPosition[1]),
+                                 T(worldCoordinates[2] - cameraPosition[2]));
+  const Eigen::Matrix<T, 3, 1> p_camera = R * p;
+
+  project(p_camera.data(), sensor, projection);
 }
 
 // Analytic derivative of the projectQuaternion function
@@ -83,6 +96,11 @@ void J_projectQuaternion_q(const double eigenUnitQuaternionRotation[4], const Ei
 
 void J_projectQuaternion_angleAxis(const double eigenUnitQuaternionRotation[4], const Eigen::Vector3d& cameraPosition,
                                    const CameraSensor& sensor, const Eigen::Vector3d& worldCoordinates, double jacobian[6]);
+
+// Analytic derivative of the projectMatrix function
+// Since its already the derivative, there is no need to support jets
+void J_projectMatrix_R(const double matrixRotation[9], const Eigen::Vector3d& cameraPosition,
+                       const CameraSensor& sensor, const Eigen::Vector3d& worldCoordinates, double jacobian[18]);
 
 // Convenience overload
 template<typename RotationType>

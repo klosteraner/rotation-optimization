@@ -18,6 +18,15 @@ Eigen::Vector2d project(const CameraPose<QuaternionRotation>& pose, const Camera
   return Eigen::Map<Eigen::Vector2d>(projection);
 }
 
+template<>
+Eigen::Vector2d project(const CameraPose<MatrixRotation>& pose, const CameraSensor& sensor, const Eigen::Vector3d& worldCoordinates)
+{
+  double projection[2];
+  projectMatrix(pose.rotation.data(), pose.position, sensor, worldCoordinates, projection);
+  return Eigen::Map<Eigen::Vector2d>(projection);
+}
+
+
 Eigen::Matrix<double, 2, 3> compute_J_project_cameraCoordinates(const Eigen::Vector3d& cameraCoordinates, const CameraSensor& sensor)
 {
   const double f_by_z = - sensor.f / cameraCoordinates.z();
@@ -27,6 +36,7 @@ Eigen::Matrix<double, 2, 3> compute_J_project_cameraCoordinates(const Eigen::Vec
         0,      f_by_z, cameraCoordinates.y() * f_by_zz;
   return J;
 }
+
 
 void J_projectQuaternion_angleAxis(const double eigenUnitQuaternionRotation[4], const Eigen::Vector3d& cameraPosition,
                                    const CameraSensor& sensor, const Eigen::Vector3d& worldCoordinates, double jacobian[6])
@@ -154,10 +164,10 @@ void J_projectQuaternion_q(const double eigenUnitQuaternionRotation[4], const Ei
     const Eigen::Quaterniond q_plus_dz = (Eigen::AngleAxisd(2.*x_plus_dz.norm(), x_plus_dz/x_plus_dz.norm())) * q;
 
     Eigen::Vector3d f, f_plus_dx, f_plus_dy, f_plus_dz;
-    compute_cameraCoordinates(q.coeffs().data(),          worldCoordinates, cameraPosition, f.data());
-    compute_cameraCoordinates(q_plus_dx.coeffs().data(),  worldCoordinates, cameraPosition, f_plus_dx.data());
-    compute_cameraCoordinates(q_plus_dy.coeffs().data(),  worldCoordinates, cameraPosition, f_plus_dy.data());
-    compute_cameraCoordinates(q_plus_dz.coeffs().data(),  worldCoordinates, cameraPosition, f_plus_dz.data());
+    compute_cameraCoordinatesQuaternion(q.coeffs().data(),          worldCoordinates, cameraPosition, f.data());
+    compute_cameraCoordinatesQuaternion(q_plus_dx.coeffs().data(),  worldCoordinates, cameraPosition, f_plus_dx.data());
+    compute_cameraCoordinatesQuaternion(q_plus_dy.coeffs().data(),  worldCoordinates, cameraPosition, f_plus_dy.data());
+    compute_cameraCoordinatesQuaternion(q_plus_dz.coeffs().data(),  worldCoordinates, cameraPosition, f_plus_dz.data());
 
     const Eigen::Vector3d fdx_p = (f_plus_dx - f)/ delta;
     const Eigen::Vector3d fdy_p = (f_plus_dy - f)/ delta;
@@ -169,5 +179,39 @@ void J_projectQuaternion_q(const double eigenUnitQuaternionRotation[4], const Ei
     std::cout << "Numerical external Jac: " << std::endl;
     std::cout << numerical_J_project_angleAxis_plus << std::endl;
   }
+}
+
+void J_projectMatrix_R(const double matrixRotation[9], const Eigen::Vector3d& cameraPosition,
+                       const CameraSensor& sensor, const Eigen::Vector3d& worldCoordinates, double jacobian[18])
+{
+  Eigen::Map<const Eigen::Matrix3d> R(matrixRotation);
+  const Eigen::Vector3d p = worldCoordinates - cameraPosition;
+  const Eigen::Vector3d p_cam = R*p;
+
+  // Directly construct dproj(Rx)/dR = dproj(p)/dp * dRx/dR
+  // dproj(p)/dp =  (-f/z 0   x*f/(z*z),
+  //                 0    f/z y*f/(z*z))
+  // dRx / dR = ( px py pz 0  0  0  0  0  0
+  //              0  0  0  px py pz 0  0  0
+  //              0  0  0  0  0  0  px py pz)
+
+  const double by_z = - 1 / p_cam.z();
+  const double f_by_z = sensor.f * by_z;
+
+  const double fpx_by_z = p.x() * f_by_z;
+  const double fpy_by_z = p.y() * f_by_z;
+  const double fpz_by_z = p.z() * f_by_z;
+
+  const double f_by_zz = f_by_z * by_z;
+  const double fx_by_zz = p_cam.x() * f_by_zz;
+  const double fy_by_zz = p_cam.y() * f_by_zz;
+
+  // Ceres expects row major jacobian, while Eigen operates with col major by default.
+  Eigen::Map<Eigen::Matrix<double, 2, 9, Eigen::RowMajor>> J(jacobian);
+  J <<  fpx_by_z, fpy_by_z, fpz_by_z, 0, 0, 0,
+        p.x()*fx_by_zz, p.y()*fx_by_zz, p.z()*fx_by_zz, // end first row dpr_x(R*p)/dR
+
+        0, 0, 0, fpx_by_z, fpy_by_z, fpz_by_z,
+        p.x()*fy_by_zz, p.y()*fy_by_zz, p.z()*fy_by_zz; // end second row dpr_x(R*p)/dR
 }
 } // namespace roto
