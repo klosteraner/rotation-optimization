@@ -18,11 +18,16 @@ endif()
 add_executable(app
   src/main.cpp
 
-  src/geometry.hpp
+  src/angleAxisReprojectionError.cpp
+  src/angleAxisReprojectionError.hpp
   src/geometry.cpp
+  src/geometry.hpp
+  src/matrixReprojectionError.cpp
+  src/matrixReprojectionError.hpp
   src/optimization.cpp
   src/optimization.h
-  src/reprojectionError.hpp
+  src/quaternionReprojectionError.cpp
+  src/quaternionReprojectionError.hpp
   src/setupScene.cpp
   src/setupScene.h
   src/types.h)
