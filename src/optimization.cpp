@@ -1,7 +1,8 @@
 #include "optimization.h"
 
-#include "geometry.hpp"
-#include "reprojectionError.hpp"
+#include "angleAxisReprojectionError.hpp"
+#include "quaternionReprojectionError.hpp"
+#include "matrixReprojectionError.hpp"
 
 #include <ceres/ceres.h>
 
@@ -16,96 +17,6 @@ namespace roto
 {
 namespace
 {
-void addAngleAxisReprojectionError(ceres::Problem& problem, const MeasuredScene<AngleAxisRotation>& measurements, OptimizedScene<AngleAxisRotation>& parameters)
-{
-  for(const auto& track : measurements.tracks)
-  {
-    for(const auto& camIdAndMark : track.marks)
-    {
-      const auto& camera = measurements.cameras.at(camIdAndMark.first);
-
-      ceres::CostFunction* f =
-        new ceres::AutoDiffCostFunction<AngleAxisReprojectionCostFunctorAuto, 2, 3>(
-          new AngleAxisReprojectionCostFunctorAuto(camera.pose.position,
-                                                   measurements.cameraSensors.at(camera.sensorId),
-                                                   camIdAndMark.second,
-                                                   track.originalPosition));
-
-      problem.AddResidualBlock(f, nullptr, parameters.rotation[camIdAndMark.first].data());
-    }
-  }
-}
-
-void addQuaternionReprojectionError(ceres::Problem& problem, const MeasuredScene<QuaternionRotation>& measurements, OptimizedScene<QuaternionRotation>& parameters, bool useAnalyticDerivative = true)
-{
-  for(const auto& track : measurements.tracks)
-  {
-    for(const auto& camIdAndMark : track.marks)
-    {
-      const auto& camera = measurements.cameras.at(camIdAndMark.first);
-
-      ceres::CostFunction* f;
-      if(useAnalyticDerivative)
-      {
-        f = new QuaternionReprojectionCostFunctionAna(camera.pose.position,
-                                                      measurements.cameraSensors.at(camera.sensorId),
-                                                      camIdAndMark.second,
-                                                      track.originalPosition);
-      }
-      else
-      {
-        f = new ceres::AutoDiffCostFunction<QuaternionReprojectionCostFunctorAuto, 2, 4>(
-              new QuaternionReprojectionCostFunctorAuto(camera.pose.position,
-                                                        measurements.cameraSensors.at(camera.sensorId),
-                                                        camIdAndMark.second,
-                                                        track.originalPosition));
-      }
-
-      // Parametrization via exp(delta) * q (without scaling, i.e. delta = 2*angleAxis)
-      problem.AddParameterBlock(parameters.rotation[camIdAndMark.first].coeffs().data(), 4, new ceres::EigenQuaternionParameterization());
-      problem.AddResidualBlock(f, nullptr, parameters.rotation[camIdAndMark.first].coeffs().data());
-    }
-  }
-}
-
-void addMatrixReprojectionError(ceres::Problem& problem, const MeasuredScene<MatrixRotation>& measurements, OptimizedScene<MatrixRotation>& parameters, bool useAnalyticDerivative = false)
-{
-  for(const auto& track : measurements.tracks)
-  {
-    for(const auto& camIdAndMark : track.marks)
-    {
-      const auto& camera = measurements.cameras.at(camIdAndMark.first);
-
-      //ceres::CostFunction* f =
-      //  new ceres::AutoDiffCostFunction<AngleAxisReprojectionCostFunctorAuto, 2, 3>(
-      //    new AngleAxisReprojectionCostFunctorAuto(camera.pose.position,
-      //                                             measurements.cameraSensors.at(camera.sensorId),
-      //                                             camIdAndMark.second,
-      //                                             track.originalPosition));
-      ceres::CostFunction* f;
-      if(useAnalyticDerivative)
-      {
-        f = new RotationMatrixReprojectionCostFunctionAna2(camera.pose.position,
-                                                          measurements.cameraSensors.at(camera.sensorId),
-                                                          camIdAndMark.second,
-                                                          track.originalPosition);
-      }
-      else
-      {
-        f = new ceres::AutoDiffCostFunction<RotationMatrixReprojectionCostFunctorAuto, 2, 9>(
-              new RotationMatrixReprojectionCostFunctorAuto(camera.pose.position,
-                                                            measurements.cameraSensors.at(camera.sensorId),
-                                                            camIdAndMark.second,
-                                                            track.originalPosition));
-      }
-
-      // Parametrization via exp(delta) * q (without scaling, i.e. delta = 2*angleAxis)
-      problem.AddParameterBlock(parameters.rotation[camIdAndMark.first].data(), 9, new RotationMatrixParameterization());
-      problem.AddResidualBlock(f, nullptr, parameters.rotation[camIdAndMark.first].data());
-    }
-  }
-}
-
 template<typename RotationType> void setupProblem(ceres::Problem& problem, const MeasuredScene<RotationType>& measurements, OptimizedScene<RotationType>& parameters);
 template<> void setupProblem(ceres::Problem& problem, const MeasuredScene<AngleAxisRotation>& measurements, OptimizedScene<AngleAxisRotation>& parameters)
 {

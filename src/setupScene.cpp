@@ -1,6 +1,8 @@
 #include "setupScene.h"
 
-#include "geometry.hpp"
+#include "angleAxisReprojectionError.hpp"
+#include "matrixReprojectionError.hpp"
+#include "quaternionReprojectionError.hpp"
 
 #include <random>
 
@@ -26,6 +28,33 @@ Eigen::Vector3d random3d(const Eigen::Vector3d& center, double sigma_x, double s
   std::normal_distribution<> normal_y(0., sigma_y);
   std::normal_distribution<> normal_z(0., sigma_z);
   return Eigen::Vector3d(normal_x(gen), normal_y(gen), normal_z(gen));
+}
+
+template<typename RotationType>
+Eigen::Vector2d project(const CameraPose<RotationType>& pose, const CameraSensor& sensor, const Eigen::Vector3d& worldCoordinates);
+
+template<>
+Eigen::Vector2d project(const CameraPose<AngleAxisRotation>& pose, const CameraSensor& sensor, const Eigen::Vector3d& worldCoordinates)
+{
+  double projection[2];
+  projectAngleAxis(pose.rotation.data(), pose.position, sensor, worldCoordinates, projection);
+  return Eigen::Map<Eigen::Vector2d>(projection);
+}
+
+template<>
+Eigen::Vector2d project(const CameraPose<QuaternionRotation>& pose, const CameraSensor& sensor, const Eigen::Vector3d& worldCoordinates)
+{
+  double projection[2];
+  projectQuaternion(pose.rotation.coeffs().data(), pose.position, sensor, worldCoordinates, projection);
+  return Eigen::Map<Eigen::Vector2d>(projection);
+}
+
+template<>
+Eigen::Vector2d project(const CameraPose<MatrixRotation>& pose, const CameraSensor& sensor, const Eigen::Vector3d& worldCoordinates)
+{
+  double projection[2];
+  projectMatrix(pose.rotation.data(), pose.position, sensor, worldCoordinates, projection);
+  return Eigen::Map<Eigen::Vector2d>(projection);
 }
 
 template<typename RotationType> RotationType applyNoise(const RotationType& rotation, double sigma);
