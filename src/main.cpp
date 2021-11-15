@@ -10,16 +10,23 @@
 int main()
 {
 	//using Rotation = roto::AngleAxisRotation; // Convenience switch
-	//using Rotation = roto::QuaternionRotation; // Convenience switch
-	using Rotation = roto::MatrixRotation; // Convenience switch
+	using Rotation = roto::QuaternionRotation; // Convenience switch
+	//using Rotation = roto::MatrixRotation; // Convenience switch
 
 	roto::MeasuredScene<Rotation> measurements;
 	roto::OptimizedScene<Rotation> parameters;
 
-	//std::tie(measurements, parameters) = roto::setupSmallTestScene<Rotation>();
-	std::tie(measurements, parameters) = roto::setupBigTestScene<Rotation>();
+	double totalTime = 0.;
+	const std::size_t numberOfIterations = 100;
+	for(std::size_t i = 0; i < numberOfIterations; i++)
+	{
+		//std::tie(measurements, parameters) = roto::setupSmallTestScene<Rotation>();
+		std::tie(measurements, parameters) = roto::setupBigTestScene<Rotation>();
 
-	roto::optimize(measurements, parameters);
+		totalTime += roto::optimize(measurements, parameters);
+	}
+	std::cout << "Average processing time: "
+						<< totalTime / double(numberOfIterations) << std::endl;
 
 	return 0;
 }

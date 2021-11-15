@@ -157,8 +157,6 @@ bool QuaternionReprojectionCostFunctionAna::Evaluate(double const* const* eigenU
 
   if(jacobians != nullptr && jacobians[0] != nullptr)
   {
-    std::cout << "current det: " << q.norm() << std::endl;
-
     // Some calculations are done again: Ok for now.
     J_projectQuaternion_q(eigenUnitQuaternionRotation[0], cameraPosition, sensor, track3D, jacobians[0]);
   }
@@ -166,8 +164,56 @@ bool QuaternionReprojectionCostFunctionAna::Evaluate(double const* const* eigenU
   return true;
 }
 
+bool LieStyleQuaternionReprojectionCostFunctionAna::Evaluate(double const* const* eigenUnitQuaternionRotation,
+                                                             double* residuals, double** jacobians) const
+{
+  Eigen::Map<const QuaternionRotation> q(eigenUnitQuaternionRotation[0]);
+
+  // This is actually a matrix rotation operation:
+  // R(q)*(track3D - cameraPosition)
+  // with a few multiplications to setup R(q)
+  const Eigen::Vector3d cameraCoordinates = q * (track3D - cameraPosition);
+
+  const double f_by_z = sensor.f / cameraCoordinates.z();
+  residuals[0] = (-cameraCoordinates.x() * f_by_z + sensor.cx) - mark.x();
+  residuals[1] = (-cameraCoordinates.y() * f_by_z + sensor.cy) - mark.y();
+
+  if(jacobians != nullptr && jacobians[0] != nullptr)
+  {
+    const double f_by_zz = f_by_z / cameraCoordinates.z();
+
+    Eigen::Matrix<double, 2, 3, Eigen::RowMajor> J_project_cameraCoordinates;
+    J_project_cameraCoordinates << -f_by_z, 0, cameraCoordinates.x() * f_by_zz,
+                                    0, -f_by_z, cameraCoordinates.y() * f_by_zz;
+
+    // We pretend to use the quaternion jacobian J_project_q,
+    Eigen::Map<Eigen::Matrix<double, 2, 4, Eigen::RowMajor>> J(jacobians[0]);
+    // while in fact we fill in the locally parameterized
+    // J_project_angleAxis = J_project_q * J_q_angleAxis
+    // = J_intrinsics * J_extrinsics
+    // = J_project_cameraCoordinates * (-[cameraCoordinates]_x)
+    // where [p]_x is a skew matrix [ 0,  -p_z,  p_y,
+    //                                p_z, 0,   -p_x,
+    //                               -p_y, p_x,  0  ]
+    // and v * [p]_x = v x p = - p x v, the crossproduct
+    J.block<1,3>(0,0) = cameraCoordinates.cross(J_project_cameraCoordinates.row(0));
+    J.block<1,3>(1,0) = cameraCoordinates.cross(J_project_cameraCoordinates.row(1));
+    J.col(3).setZero();
+  }
+  return true;
+}
+
+/// This is a mock jacobian: identity on first 3 elements (tangent space), 0 on last
+bool LieStyleParameterization::ComputeJacobian(const double* q, double* J_q_delta_at_zero) const
+{
+  Eigen::Map<Eigen::Matrix<double, 4, 3, Eigen::RowMajor>> J(J_q_delta_at_zero);
+  J.block<3,3>(0,0).setIdentity();
+  J.block<1,3>(3,0).setZero();
+  return true;
+}
+
 void addQuaternionReprojectionError(ceres::Problem& problem, const MeasuredScene<QuaternionRotation>& measurements,
-                                    OptimizedScene<QuaternionRotation>& parameters, bool useAnalyticDerivative)
+                                    OptimizedScene<QuaternionRotation>& parameters, DerivativeType derivativeType)
 {
   for(const auto& track : measurements.tracks)
   {
@@ -176,25 +222,38 @@ void addQuaternionReprojectionError(ceres::Problem& problem, const MeasuredScene
       const auto& camera = measurements.cameras.at(camIdAndMark.first);
 
       ceres::CostFunction* f;
-      if(useAnalyticDerivative)
+      switch(derivativeType)
       {
-        f = new QuaternionReprojectionCostFunctionAna(camera.pose.position,
-                                                      measurements.cameraSensors.at(camera.sensorId),
-                                                      camIdAndMark.second,
-                                                      track.originalPosition);
-      }
-      else
-      {
-        f = new ceres::AutoDiffCostFunction<QuaternionReprojectionCostFunctorAuto, 2, 4>(
-              new QuaternionReprojectionCostFunctorAuto(camera.pose.position,
+        case DerivativeType::Automatic:
+          f = new ceres::AutoDiffCostFunction<QuaternionReprojectionCostFunctorAuto, 2, 4>(
+                new QuaternionReprojectionCostFunctorAuto(camera.pose.position,
+                                                          measurements.cameraSensors.at(camera.sensorId),
+                                                          camIdAndMark.second,
+                                                          track.originalPosition));
+          // Parametrization via exp(delta) * q (without scaling, i.e. delta = 2*angleAxis)
+          problem.AddParameterBlock(parameters.rotation[camIdAndMark.first].coeffs().data(),
+                                    4, new ceres::EigenQuaternionParameterization());
+
+          break;
+        case DerivativeType::AnalyticCeresStyle:
+          f = new QuaternionReprojectionCostFunctionAna(camera.pose.position,
                                                         measurements.cameraSensors.at(camera.sensorId),
                                                         camIdAndMark.second,
-                                                        track.originalPosition));
+                                                        track.originalPosition);
+          // Parametrization via exp(delta) * q (without scaling, i.e. delta = 2*angleAxis)
+          problem.AddParameterBlock(parameters.rotation[camIdAndMark.first].coeffs().data(),
+                                    4, new ceres::EigenQuaternionParameterization());
+          break;
+        case DerivativeType::AnalyticLieStyle:
+          f = new LieStyleQuaternionReprojectionCostFunctionAna(camera.pose.position,
+                                                                measurements.cameraSensors.at(camera.sensorId),
+                                                                camIdAndMark.second,
+                                                                track.originalPosition);
+          // Mock Parametrization (actual parametrization in cost function, same parametrizatoin as the other)
+          problem.AddParameterBlock(parameters.rotation[camIdAndMark.first].coeffs().data(),
+                                    4, new LieStyleParameterization());
       }
 
-      // Parametrization via exp(delta) * q (without scaling, i.e. delta = 2*angleAxis)
-      problem.AddParameterBlock(parameters.rotation[camIdAndMark.first].coeffs().data(),
-                                4, new ceres::EigenQuaternionParameterization());
       problem.AddResidualBlock(f, nullptr, parameters.rotation[camIdAndMark.first].coeffs().data());
     }
   }
