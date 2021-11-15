@@ -112,7 +112,7 @@ template<> void printErrorStatistics(const std::vector<Camera<MatrixRotation> >&
 }
 
 template<typename RotationType>
-void optimizeImpl(const MeasuredScene<RotationType>& measurements, OptimizedScene<RotationType>& parameters)
+double optimizeImpl(const MeasuredScene<RotationType>& measurements, OptimizedScene<RotationType>& parameters)
 {
   auto initialParameters = parameters;
 
@@ -149,19 +149,21 @@ void optimizeImpl(const MeasuredScene<RotationType>& measurements, OptimizedScen
     print(measurements.cameras.at(i).pose.rotation, initialParameters.rotation.at(i), parameters.rotation.at(i));
   }
   printErrorStatistics(measurements.cameras, parameters.rotation);
+
+  return time_span.count();
 }
 } // namespace
 
-template<> void optimize(const MeasuredScene<AngleAxisRotation>& measurements, OptimizedScene<AngleAxisRotation>& parameters)
+template<> double optimize(const MeasuredScene<AngleAxisRotation>& measurements, OptimizedScene<AngleAxisRotation>& parameters)
 {
-  optimizeImpl(measurements, parameters);
+  return optimizeImpl(measurements, parameters);
 }
-template<> void optimize(const MeasuredScene<QuaternionRotation>& measurements, OptimizedScene<QuaternionRotation>& parameters)
+template<> double optimize(const MeasuredScene<QuaternionRotation>& measurements, OptimizedScene<QuaternionRotation>& parameters)
 {
-  optimizeImpl(measurements, parameters);
+  return optimizeImpl(measurements, parameters);
 }
-template<> void optimize(const MeasuredScene<MatrixRotation>& measurements, OptimizedScene<MatrixRotation>& parameters)
+template<> double optimize(const MeasuredScene<MatrixRotation>& measurements, OptimizedScene<MatrixRotation>& parameters)
 {
-  optimizeImpl(measurements, parameters);
+  return optimizeImpl(measurements, parameters);
 }
 } //namespace roto

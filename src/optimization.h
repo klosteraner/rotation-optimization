@@ -7,6 +7,7 @@
 namespace roto
 {
 // Setups & runs optimization on provided parameters
+// return processing time (excluding problem setup and report printing) 
 template<typename RotationType>
-void optimize(const MeasuredScene<RotationType>& measurements, OptimizedScene<RotationType>& parameters);
+double optimize(const MeasuredScene<RotationType>& measurements, OptimizedScene<RotationType>& parameters);
 }
